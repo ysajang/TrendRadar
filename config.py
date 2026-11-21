@@ -213,3 +213,15 @@ EVENT_MERGE_MIN_SHARED = 3
 # 엔터/문화/게임 TOP 최소 빈도 (미만은 섹션에서 제외)
 # 빈도 2회짜리는 시그널이 아니라 노이즈 — 남는 게 없으면 섹션 자체를 생략
 ENTERTAINMENT_MIN_COUNT = 3
+
+# ──────────────────────────────────────────────
+# YouTube Data API (공식 API 전용)
+# search.list 하루 한도는 수동 검색과 공유 — 봇은 상한까지만 사용
+# 하루 경계는 태평양 시간 자정 (YouTube 할당량 리셋 기준)
+# ──────────────────────────────────────────────
+YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
+YOUTUBE_DAILY_SEARCH_LIMIT = 20          # 봇 몫. 수동 검색 몫과 합쳐 하루 100회
+YOUTUBE_LOOKBACK_HOURS = 48              # 최근 N시간 업로드만
+YOUTUBE_SEARCH_MAX_RESULTS = 10          # search.list 1페이지 결과 수 (페이지 넘김 금지)
+YOUTUBE_CHANNELS_PER_KEYWORD = 3         # 키워드당 표시 채널 수
+YOUTUBE_QUOTA_PATH = DATA_DIR / "youtube_quota.json"
