@@ -22,8 +22,9 @@ from collector.rss_collector import fetch_all_feeds, ENTERTAINMENT_CATEGORIES
 from collector.naver_news import search_by_keywords
 from collector.naver_datalab import verify_trends
 from collector.steam_charts import fetch_steam_signals
+from collector.youtube_channels import fetch_youtube_channels
 from analyzer.keyword_extractor import analyze_keywords
-from analyzer.report_builder import build_report
+from analyzer.report_builder import build_report, build_youtube_queries
 from storage.json_store import (
     save_daily_data, load_yesterday_keywords, cleanup_old_data,
     load_recent_keyword_sets,
@@ -155,6 +156,12 @@ async def run() -> int:
         recent_keyword_sets=recent_kw_sets,
         steam_games=steam_games,
     )
+
+    # ── YouTube 채널 수집 (리포트 키워드 기준, 실패해도 리포트 진행) ──
+    try:
+        report.youtube_channels = await fetch_youtube_channels(build_youtube_queries(report))
+    except Exception as e:
+        logger.error(f"YouTube 수집 실패 (리포트는 계속): {e}")
 
     # ── 텔레그램 발송 ──
     formatted = format_report(report)

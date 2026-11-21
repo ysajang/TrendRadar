@@ -80,6 +80,9 @@ class ReportData:
     # 섹션 7: Steam 선행지표 (dict 리스트 — SteamGame.to_dict())
     steam_games: list[dict] = field(default_factory=list)
 
+    # 섹션 8: YouTube 채널 (dict 리스트 — collector.youtube_channels 결과)
+    youtube_channels: list[dict] = field(default_factory=list)
+
 
 def _map_datalab_tags(
     layer3_items: list[TrendItem],
@@ -565,3 +568,21 @@ def build_report(
         f"트렌드 태그 {len(trend_highlights)}종"
     )
     return report
+
+
+def build_youtube_queries(report: ReportData) -> list[tuple[str, str]]:
+    """
+    YouTube 검색 대상 (표시 키워드, 검색어) 리스트
+
+    순서: 종합 TOP → 엔터 TOP (중복 키워드는 1번만)
+    검색어: 병합된 키워드가 있으면 "대표 첫번째병합" (일반어 단독 검색의 무관 결과 감소)
+    """
+    queries: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for kw in report.top_keywords + report.entertainment_keywords:
+        if kw.keyword in seen:
+            continue
+        seen.add(kw.keyword)
+        query = f"{kw.keyword} {kw.merged_keywords[0]}" if kw.merged_keywords else kw.keyword
+        queries.append((kw.keyword, query))
+    return queries

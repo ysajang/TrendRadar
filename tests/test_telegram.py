@@ -232,3 +232,68 @@ class TestTagEmoji:
     def test_emoji_not_empty(self):
         for tag, emoji in TAG_EMOJI.items():
             assert len(emoji) > 0
+
+
+# ── v2.8: YouTube 섹션 ──
+
+from notifier.telegram import _format_count
+
+
+def _yt_entry(keyword, channels):
+    return {"keyword": keyword, "query": keyword, "channels": channels}
+
+
+def _yt_channel(title, video, subs=None, views=None):
+    return {
+        "channel_id": f"id-{title}", "channel_title": title,
+        "subscriber_count": subs, "video_title": video,
+        "video_id": f"v-{title}", "view_count": views,
+    }
+
+
+class TestYoutubeSection:
+    def test_no_youtube_output_unchanged(self):
+        base = _make_report(top_keywords=[_make_top_kw("트럼프")])
+        with_empty = _make_report(top_keywords=[_make_top_kw("트럼프")])
+        with_empty.youtube_channels = []
+        assert format_report(base) == format_report(with_empty)
+        assert "YouTube" not in format_report(base)
+
+    def test_section_header_and_lines(self):
+        report = _make_report()
+        report.youtube_channels = [_yt_entry("버스", [
+            _yt_channel("채널A", "버스 파업 타결", subs=123000, views=45000),
+            _yt_channel("채널B", "시내버스 정상 운행"),
+        ])]
+        result = format_report(report)
+        assert "📺 YouTube (최근 48시간 · 조회순 · YouTube API)" in result
+        assert "▸ [버스] 채널A (구독 12.3만) · 버스 파업 타결 (조회 4.5만)" in result
+        assert "   채널B · 시내버스 정상 운행" in result
+
+    def test_keyword_without_channels_omitted(self):
+        report = _make_report()
+        report.youtube_channels = [
+            _yt_entry("회담", []),
+            _yt_entry("버스", [_yt_channel("채널A", "영상")]),
+        ]
+        result = format_report(report)
+        assert "[회담]" not in result
+        assert "[버스]" in result
+
+    def test_all_keywords_empty_omits_section(self):
+        report = _make_report()
+        report.youtube_channels = [_yt_entry("회담", [])]
+        assert "YouTube" not in format_report(report)
+
+    def test_long_video_title_truncated(self):
+        report = _make_report()
+        report.youtube_channels = [_yt_entry("버스", [_yt_channel("A", "가" * 80)])]
+        result = format_report(report)
+        assert "가" * 57 + "..." in result
+        assert "가" * 58 not in result
+
+    def test_format_count(self):
+        assert _format_count(9999) == "9999"
+        assert _format_count(10000) == "1.0만"
+        assert _format_count(123000) == "12.3만"
+        assert _format_count(1500000) == "150.0만"

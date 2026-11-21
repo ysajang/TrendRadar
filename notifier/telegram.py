@@ -35,6 +35,46 @@ def _format_merged(kw) -> str:
     return f" (+{'/'.join(kw.merged_keywords)})"
 
 
+def _format_count(n: int) -> str:
+    """1만 이상은 N.N만, 미만은 정수"""
+    if n >= 10000:
+        return f"{n / 10000:.1f}만"
+    return str(n)
+
+
+def _truncate_title(title: str) -> str:
+    """대표 뉴스와 같은 길이 기준"""
+    if len(title) > 60:
+        return title[:57] + "..."
+    return title
+
+
+def _format_youtube_section(entries: list[dict]) -> list[str]:
+    """YouTube 섹션 줄 목록. 채널이 하나도 없으면 빈 리스트 (섹션 생략)"""
+    body: list[str] = []
+    for entry in entries:
+        channels = entry.get("channels") or []
+        for i, ch in enumerate(channels):
+            subs = ch.get("subscriber_count")
+            views = ch.get("view_count")
+            subs_str = f" (구독 {_format_count(subs)})" if subs is not None else ""
+            views_str = f" (조회 {_format_count(views)})" if views is not None else ""
+            prefix = f"▸ [{entry.get('keyword', '')}] " if i == 0 else "   "
+            body.append(
+                f"{prefix}{ch.get('channel_title', '')}{subs_str} · "
+                f"{_truncate_title(ch.get('video_title', ''))}{views_str}"
+            )
+    if not body:
+        return []
+    return [
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"📺 YouTube (최근 {config.YOUTUBE_LOOKBACK_HOURS}시간 · 조회순 · YouTube API)",
+        "━━━━━━━━━━━━━━━━━━━━",
+        *body,
+        "",
+    ]
+
+
 def format_report(report: ReportData) -> str:
     """
     ReportData → 텔레그램 메시지 포맷
@@ -155,6 +195,9 @@ def format_report(report: ReportData) -> str:
             riser_names = [g.get("name") or str(g.get("appid")) for g in risers]
             lines.append(f"🚀 급상승 주목: {' / '.join(riser_names)}")
         lines.append("")
+
+    # ── 섹션 3.6: 📺 YouTube 채널 ──
+    lines.extend(_format_youtube_section(report.youtube_channels))
 
     # ── 섹션 4: 7일 추이 요약 (종합 + 엔터 통합) ──
     if report.trend_highlights:

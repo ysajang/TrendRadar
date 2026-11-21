@@ -986,3 +986,41 @@ class TestEventMergeInReport:
         kws = [_make_keyword_result(f"키워드{i}", 20 - i) for i in range(3)]
         report = build_report([], [], [], kws)
         assert all(kw.merged_keywords == [] for kw in report.top_keywords)
+
+
+# ── v2.8: YouTube 검색어 생성 ──
+
+from analyzer.report_builder import build_youtube_queries
+
+
+class TestBuildYoutubeQueries:
+    def _kw(self, keyword, merged=None):
+        return TopKeyword(keyword=keyword, count=10, merged_keywords=merged or [])
+
+    def test_merged_keyword_adds_first_merged(self):
+        report = ReportData(top_keywords=[self._kw("버스", ["노사", "시내"])])
+        assert build_youtube_queries(report) == [("버스", "버스 노사")]
+
+    def test_plain_keyword_alone(self):
+        report = ReportData(top_keywords=[self._kw("트럼프")])
+        assert build_youtube_queries(report) == [("트럼프", "트럼프")]
+
+    def test_top_then_entertainment_order(self):
+        report = ReportData(
+            top_keywords=[self._kw("트럼프"), self._kw("수능")],
+            entertainment_keywords=[self._kw("지스타")],
+        )
+        assert [k for k, _ in build_youtube_queries(report)] == ["트럼프", "수능", "지스타"]
+
+    def test_duplicate_keyword_once(self):
+        report = ReportData(
+            top_keywords=[self._kw("AI")],
+            entertainment_keywords=[self._kw("AI"), self._kw("지스타")],
+        )
+        assert [k for k, _ in build_youtube_queries(report)] == ["AI", "지스타"]
+
+    def test_empty_report(self):
+        assert build_youtube_queries(ReportData()) == []
+
+    def test_report_has_youtube_channels_default_empty(self):
+        assert ReportData().youtube_channels == []
