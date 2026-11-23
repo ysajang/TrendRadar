@@ -43,6 +43,10 @@ class _QuotaExhausted(Exception):
     """할당량 소진 (봇 상한 도달 또는 API quotaExceeded)"""
 
 
+class _RequestRejected(Exception):
+    """재시도해도 같은 결과인 거절 (키 오류 등 4xx) → 남은 검색 전체 중단"""
+
+
 # ──────────────────────────────────────────────
 # 할당량 가드
 # ──────────────────────────────────────────────
@@ -89,13 +93,21 @@ def _consume_search() -> None:
 # API 호출
 # ──────────────────────────────────────────────
 
-def _is_quota_error(body: dict) -> bool:
-    errors = (body or {}).get("error", {}).get("errors", []) or []
-    return any(e.get("reason") in QUOTA_REASONS for e in errors if isinstance(e, dict))
+def _error_reason(body: dict) -> str:
+    """오류 응답의 reason (예: quotaExceeded, keyInvalid). 키는 포함되지 않음"""
+    error = (body or {}).get("error", {}) or {}
+    for e in error.get("errors", []) or []:
+        if isinstance(e, dict) and e.get("reason"):
+            return str(e["reason"])
+    return str(error.get("status", "")) or "unknown"
 
 
 async def _search_once(session: aiohttp.ClientSession, query: str) -> list[dict] | None:
-    """search.list 1회. 성공 시 items, 일반 실패 시 None, 할당량 오류 시 _QuotaExhausted"""
+    """
+    search.list 1회
+    성공 → items / 재시도할 만한 실패(5xx·429·연결) → None
+    할당량 오류 → _QuotaExhausted / 그 외 4xx → _RequestRejected
+    """
     _consume_search()
     published_after = (
         datetime.now(timezone.utc) - timedelta(hours=config.YOUTUBE_LOOKBACK_HOURS)
@@ -119,9 +131,12 @@ async def _search_once(session: aiohttp.ClientSession, query: str) -> list[dict]
                 body = {}
             if resp.status == 200:
                 return body.get("items", []) or []
-            if resp.status == 403 and _is_quota_error(body):
-                raise _QuotaExhausted("API quotaExceeded")
-            logger.warning(f"YouTube 검색 HTTP {resp.status} ({query})")
+            reason = _error_reason(body)
+            if resp.status == 403 and reason in QUOTA_REASONS:
+                raise _QuotaExhausted(f"API {reason}")
+            if 400 <= resp.status < 500 and resp.status != 429:
+                raise _RequestRejected(f"HTTP {resp.status} {reason}")
+            logger.warning(f"YouTube 검색 HTTP {resp.status} {reason} ({query})")
             return None
     except (aiohttp.ClientError, asyncio.TimeoutError) as e:
         logger.warning(f"YouTube 검색 연결 실패 ({query}): {type(e).__name__}")
@@ -229,7 +244,7 @@ async def fetch_youtube_channels(queries: list[tuple[str, str]]) -> list[dict]:
             for keyword, query in queries:
                 try:
                     items = await _search(session, query)
-                except _QuotaExhausted as e:
+                except (_QuotaExhausted, _RequestRejected) as e:
                     logger.warning(f"YouTube 검색 중단: {e} (남은 키워드 건너뜀)")
                     break
                 if items is None:

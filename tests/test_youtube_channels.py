@@ -252,3 +252,40 @@ class TestFetchYoutubeChannels:
         with caplog.at_level("DEBUG"):
             _run(api, [("a", "a")])
         assert "test_key" not in caplog.text
+
+
+class TestRequestRejected:
+    """4xx(할당량·429 제외)는 재시도해도 같은 결과 → 재시도 없이 전체 중단 (할당량 보호)"""
+
+    KEY_INVALID = {"error": {"code": 400, "errors": [{"reason": "keyInvalid"}]}}
+
+    def test_400_no_retry_and_stops_remaining(self):
+        api = _FakeApi([_resp(400, self.KEY_INVALID) for _ in range(6)])
+        result = _run(api, [("a", "a"), ("b", "b"), ("c", "c")])
+        assert len(api.search_calls()) == 1
+        assert result == []
+        assert _read_quota()["search_calls"] == 1
+
+    def test_400_reason_logged_without_key(self, caplog):
+        api = _FakeApi([_resp(400, self.KEY_INVALID)])
+        with caplog.at_level("WARNING"):
+            _run(api, [("a", "a")])
+        assert "keyInvalid" in caplog.text
+        assert "test_key" not in caplog.text
+
+    def test_429_is_retried(self):
+        api = _FakeApi([
+            _resp(429, {}),
+            _resp(200, _search_body([("v1", "t", "c1", "A")])),
+        ])
+        result = _run(api, [("a", "a")])
+        assert len(api.search_calls()) == 2
+        assert result[0]["channels"][0]["channel_id"] == "c1"
+
+    def test_results_before_rejection_kept(self):
+        api = _FakeApi([
+            _resp(200, _search_body([("v1", "t", "c1", "A")])),
+            _resp(400, self.KEY_INVALID),
+        ])
+        result = _run(api, [("a", "a"), ("b", "b")])
+        assert [r["keyword"] for r in result] == ["a"]
