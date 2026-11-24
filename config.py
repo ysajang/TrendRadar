@@ -220,7 +220,7 @@ ENTERTAINMENT_MIN_COUNT = 3
 # 하루 경계는 태평양 시간 자정 (YouTube 할당량 리셋 기준)
 # ──────────────────────────────────────────────
 YOUTUBE_API_KEY = os.getenv("YOUTUBE_API_KEY", "")
-YOUTUBE_DAILY_SEARCH_LIMIT = 20          # 봇 몫. 수동 검색 몫과 합쳐 하루 100회
+YOUTUBE_DAILY_SEARCH_LIMIT = 10          # 봇 몫. 수동 검색 몫과 합쳐 하루 100회
 YOUTUBE_LOOKBACK_HOURS = 48              # 최근 N시간 업로드만
 YOUTUBE_SEARCH_MAX_RESULTS = 10          # search.list 1페이지 결과 수 (페이지 넘김 금지)
 YOUTUBE_CHANNELS_PER_KEYWORD = 3         # 키워드당 표시 채널 수
